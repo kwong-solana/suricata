@@ -152,6 +152,7 @@
 #include "app-layer-smtp.h"
 #include "app-layer-smb.h"
 #include "app-layer-modbus.h"
+#include "app-layer-enip.h"
 
 #include "util-decode-der.h"
 #include "util-radix-tree.h"

@@ -733,7 +733,7 @@ int DecodeCIPRequestMSPPDU(uint8_t *input, uint32_t input_len,
     for (int svc = 1; svc < num_services + 1; svc++)
     {
 
-        if (temp_offset > input_len)
+        if (temp_offset >= (input_len - sizeof(uint16_t)))
         {
             SCLogDebug("DecodeCIPRequestMSP: Parsing beyond payload length\n");
             return 0;
@@ -777,7 +777,7 @@ int DecodeCIPResponseMSPPDU(uint8_t *input, uint32_t input_len,
     for (int svc = 0; svc < num_services; svc++)
     {
 
-        if (temp_offset > input_len)
+        if (temp_offset >= (input_len - sizeof(uint16_t)))
         {
             SCLogDebug("DecodeCIPResponseMSP: Parsing beyond payload length\n");
             return 0;

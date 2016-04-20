@@ -105,7 +105,6 @@ void *ENIPGetTx(void *alstate, uint64_t tx_id) {
         return enip->curr;
 
     TAILQ_FOREACH(tx, &enip->tx_list, next) {
-        SCLogDebug("tx->tx_num %"PRIu64", tx_id %"PRIu64, tx->tx_num, (tx_id+1));
         if (tx->tx_num != (tx_id+1))
             continue;
 
