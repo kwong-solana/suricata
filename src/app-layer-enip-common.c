@@ -256,6 +256,12 @@ int DecodeCommonPacketFormatPDU(uint8_t *input, uint32_t input_len,
         return 0;
     }
 
+    if (offset >= (input_len - (sizeof(uint32_t) + sizeof(uint16_t)*4)))
+    {
+            SCLogDebug("DecodeCommonPacketFormat: Parsing beyond payload length\n");
+            return 0;
+    }
+
     uint32_t handle;
     uint16_t timeout;
     uint16_t count;
@@ -278,9 +284,19 @@ int DecodeCommonPacketFormatPDU(uint8_t *input, uint32_t input_len,
     //depending on addr type, get connection id, sequence if needed.  Can also use addr length too?
     if (address_type == CONNECTION_BASED)
     { //get 4 byte connection id
+	if (offset >= (input_len - sizeof(uint32_t)))
+    	{
+            SCLogDebug("DecodeCommonPacketFormat: Parsing beyond payload length\n");
+            return 0;
+	}
         ENIPExtractUint32(&address_connectionid, input, &offset);
     } else if (address_type == SEQUENCE_ADDR_ITEM)
     { // get 4 byte connection id and 4 byte sequence
+	if (offset >= (input_len - sizeof(uint32_t)*2))
+    	{
+            SCLogDebug("DecodeCommonPacketFormat: Parsing beyond payload length\n");
+            return 0;
+	}
         ENIPExtractUint32(&address_connectionid, input, &offset);
         ENIPExtractUint32(&address_sequence, input, &offset);
     }
@@ -294,6 +310,11 @@ int DecodeCommonPacketFormatPDU(uint8_t *input, uint32_t input_len,
     uint16_t data_length; //length of data in bytes
     uint16_t data_sequence_count;
 
+    if (offset >= (input_len - sizeof(uint16_t)*2))
+    {
+        SCLogDebug("DecodeCommonPacketFormat: Parsing beyond payload length\n");
+        return 0;
+    }
     ENIPExtractUint16(&data_type, input, &offset);
     ENIPExtractUint16(&data_length, input, &offset);
 
@@ -302,6 +323,11 @@ int DecodeCommonPacketFormatPDU(uint8_t *input, uint32_t input_len,
 
     if (enip_data->encap_data_item.type == CONNECTED_DATA_ITEM)
     { //connected data items have seq number
+        if (offset >= (input_len - sizeof(uint16_t)))
+        {
+            SCLogDebug("DecodeCommonPacketFormat: Parsing beyond payload length\n");
+            return 0;
+        }
         ENIPExtractUint16(&data_sequence_count, input, &offset);
         enip_data->encap_data_item.sequence_count = data_sequence_count;
     }
@@ -395,7 +421,11 @@ int DecodeCIPRequestPDU(uint8_t *input, uint32_t input_len,
 
     uint8_t service; //<-----CIP SERVICE
     uint8_t path_size;
-
+    if (offset >= (input_len - sizeof(uint8_t)*2))
+    {
+        SCLogDebug("DecodeCIPRequest: Parsing beyond payload length\n");
+        return 0;
+    }
     ENIPExtractUint8(&service, input, &offset);
     ENIPExtractUint8(&path_size, input, &offset);
 
