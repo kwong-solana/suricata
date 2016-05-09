@@ -117,8 +117,8 @@ static CIPServiceEntry *CIPServiceAlloc(ENIPTransaction *tx)
     TAILQ_INIT(&svc->attrib_list);
 
     TAILQ_INSERT_TAIL(&tx->service_list, svc, next);
-    // svc->service = 75;
-
+    tx->service_count++;
+    
     return svc;
 
 }
@@ -375,7 +375,7 @@ int DecodeCIPPDU(uint8_t *input, uint32_t input_len,
         return 0;
     }
 
-    if (offset > input_len)
+    if (offset > (input_len - sizeof(uint8_t)))
     {
         SCLogDebug("DecodeCIP: Parsing beyond payload length\n");
         return 0;
@@ -432,6 +432,13 @@ int DecodeCIPRequestPDU(uint8_t *input, uint32_t input_len,
     if (service > MAX_CIP_SERVICE)
     { // service codes of value 0x80 or greater are not permitted because in the CIP protocol the highest order bit is used to flag request(0)/response(1)
         SCLogDebug("DecodeCIPRequest - INVALID CIP SERVICE 0x%x\n", service);
+        return 0;
+    }
+
+    //reached maximum number of services
+    if (enip_data->service_count > 32)
+    {
+        SCLogDebug("DecodeCIPRequest: Maximum services reached\n");
         return 0;
     }
 
@@ -547,14 +554,23 @@ int DecodeCIPRequestPathPDU(uint8_t *input, uint32_t input_len,
 
     while (bytes_remain > 0)
     {
-
+        if (offset >= (input_len - sizeof(uint8_t)))
+        {
+            SCLogDebug("DecodeCIPRequestPathPDU: Parsing beyond payload length\n");
+            return 0;
+        }
         ENIPExtractUint8(&segment, input, &offset);
         switch (segment)
         { //assume order is class then instance.  Can have multiple
             case PATH_CLASS_8BIT:
+                if (offset >= (input_len - sizeof(uint8_t)))
+                {
+                    SCLogDebug("DecodeCIPRequestPathPDU: Parsing beyond payload length\n");
+                    return 0;
+                }
                 ENIPExtractUint8(&req_path_class8, input, &offset);
                 class = (uint16_t) req_path_class8;
-                SCLogDebug("DecodeCIPRequestPath: 8bit class 0x%x\n", class);
+                SCLogDebug("DecodeCIPRequestPathPDU: 8bit class 0x%x\n", class);
 
                 seg = SCMalloc(sizeof(SegmentEntry));
                 if (unlikely(seg == NULL))
@@ -566,11 +582,21 @@ int DecodeCIPRequestPathPDU(uint8_t *input, uint32_t input_len,
                 bytes_remain--;
                 break;
             case PATH_INSTANCE_8BIT:
+                if (offset >= (input_len - sizeof(uint8_t)))
+                {
+                    SCLogDebug("DecodeCIPRequestPathPDU: Parsing beyond payload length\n");
+                    return 0;
+                }
                 ENIPExtractUint8(&req_path_instance8, input, &offset);
                 //skip instance, don't need to store
                 bytes_remain--;
                 break;
             case PATH_ATTR_8BIT: //single attribute
+                if (offset >= (input_len - sizeof(uint8_t)))
+                {
+                    SCLogDebug("DecodeCIPRequestPathPDU: Parsing beyond payload length\n");
+                    return 0;
+                }
                 ENIPExtractUint8(&req_path_attr8, input, &offset);
                 //uint16_t attrib = (uint16_t) req_path_attr8;
                 //SCLogDebug("DecodeCIPRequestPath: 8bit attr 0x%x\n", attrib);
@@ -585,7 +611,17 @@ int DecodeCIPRequestPathPDU(uint8_t *input, uint32_t input_len,
                 bytes_remain--;
                 break;
             case PATH_CLASS_16BIT:
+                if (offset >= (input_len - sizeof(uint8_t)))
+                {
+                    SCLogDebug("DecodeCIPRequestPath: Parsing beyond payload length\n");
+                    return 0;
+                }
                 ENIPExtractUint8(&reserved, input, &offset); //skip reserved
+                if (offset >= (input_len - sizeof(uint16_t)))
+                {
+                    SCLogDebug("DecodeCIPRequestPath: Parsing beyond payload length\n");
+                    return 0;
+                }
                 ENIPExtractUint16(&req_path_class16, input, &offset);
                 class = req_path_class16;
                 SCLogDebug("DecodeCIPRequestPath: 16bit class 0x%x\n", class);
@@ -600,7 +636,17 @@ int DecodeCIPRequestPathPDU(uint8_t *input, uint32_t input_len,
                 bytes_remain = bytes_remain - 2;
                 break;
             case PATH_INSTANCE_16BIT:
+                if (offset >= (input_len - sizeof(uint8_t)))
+                {
+                    SCLogDebug("DecodeCIPRequestPathPDU: Parsing beyond payload length\n");
+                    return 0;
+                }
                 ENIPExtractUint8(&reserved, input, &offset); // skip reserved
+                if (offset >= (input_len - sizeof(uint16_t)))
+                {
+                    SCLogDebug("DecodeCIPRequestPathPDU: Parsing beyond payload length\n");
+                    return 0;
+                }
                 ENIPExtractUint16(&req_path_instance16, input, &offset);
                 //skip instance, don't need to store
                 bytes_remain = bytes_remain - 2;
@@ -619,11 +665,21 @@ int DecodeCIPRequestPathPDU(uint8_t *input, uint32_t input_len,
         uint16_t attr_list_count;
         uint16_t attribute;
         //parse get/set attribute list
+        if (offset >= (input_len - sizeof(uint16_t)))
+        {
+            SCLogDebug("DecodeCIPRequestPathPDU: Parsing beyond payload length\n");
+            return 0;
+        }
         ENIPExtractUint16(&attr_list_count, input, &offset);
         SCLogDebug("DecodeCIPRequestPathPDU: attribute list count %d\n",
                 attr_list_count);
         for (int i = 0; i < attr_list_count; i++)
         {
+            if (offset >= (input_len - sizeof(uint16_t)))
+            {
+                SCLogDebug("DecodeCIPRequestPath: Parsing beyond payload length\n");
+                return 0;
+            }
             ENIPExtractUint16(&attribute, input, &offset);
             SCLogDebug("DecodeCIPRequestPathPDU: attribute %d\n", attribute);
             //save attrs
@@ -660,6 +716,11 @@ int DecodeCIPResponsePDU(uint8_t *input, uint32_t input_len,
         return 0;
     }
 
+    if (offset >= (input_len - (sizeof(uint8_t)*2 + sizeof(uint16_t))))
+    {
+        SCLogDebug("DecodeCIPResponsePDU: Parsing beyond payload length\n");
+        return 0;
+    }
     uint8_t service; //<----CIP SERVICE
     uint8_t reserved; //unused byte reserved by ODVA
     uint16_t status;
@@ -672,6 +733,13 @@ int DecodeCIPResponsePDU(uint8_t *input, uint32_t input_len,
     service &= 0x7f; //strip off top bit to get service code.  Responses have first bit as 1
 
     SCLogDebug("CIP service 0x%x status 0x%x\n", service, status);
+
+    //reached maximum number of services
+    if (enip_data->service_count > 32)
+    {
+        SCLogDebug("DecodeCIPRequest: Maximum services reached\n");
+        return 0;
+    }
 
     //save CIP data
     CIPServiceEntry *node = CIPServiceAlloc(enip_data);
@@ -751,7 +819,11 @@ int DecodeCIPRequestMSPPDU(uint8_t *input, uint32_t input_len,
         ENIPTransaction *enip_data, uint16_t offset)
 {
     int ret = 1;
-
+    if (offset >= (input_len - sizeof(uint16_t)))
+    {
+        SCLogDebug("DecodeCIPRequestMSPPDU: Parsing beyond payload length\n");
+        return 0;
+    }
     //use temp_offset just to grab the service offset, don't want to use and push offset
     uint16_t temp_offset = offset;
     uint16_t num_services;
@@ -765,7 +837,7 @@ int DecodeCIPRequestMSPPDU(uint8_t *input, uint32_t input_len,
 
         if (temp_offset >= (input_len - sizeof(uint16_t)))
         {
-            SCLogDebug("DecodeCIPRequestMSP: Parsing beyond payload length\n");
+            SCLogDebug("DecodeCIPRequestMSPPDU: Parsing beyond payload length\n");
             return 0;
         }
 
@@ -796,6 +868,11 @@ int DecodeCIPResponseMSPPDU(uint8_t *input, uint32_t input_len,
 {
     int ret = 1;
 
+    if (offset >= (input_len - sizeof(uint16_t)))
+    {
+        SCLogDebug("DecodeCIPResponseMSPPDU: Parsing beyond payload length\n");
+        return 0;
+    }
     //use temp_offset just to grab the service offset, don't want to use and push offset
     uint16_t temp_offset = offset;
     uint16_t num_services;

@@ -267,6 +267,7 @@ static ENIPTransaction *ENIPTransactionAlloc(ENIPState *state)
 
     tx->enip  = state;
     tx->tx_num  = state->transaction_max;
+    tx->service_count = 0;
 
     TAILQ_INSERT_TAIL(&state->tx_list, tx, next);
 
