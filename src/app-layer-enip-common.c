@@ -44,12 +44,18 @@
  * @param input
  * @param offset
  */
-void ENIPExtractUint8(uint8_t *res, uint8_t *input, uint16_t *offset)
+int ENIPExtractUint8(uint8_t *res, uint8_t *input, uint16_t *offset, uint32_t input_len)
 {
-    SCEnter();
+
+    if (*offset > (input_len - sizeof(uint8_t)))
+    {        
+        SCLogDebug("ENIPExtractUint8: Parsing beyond payload length\n");
+        return 0;
+    }
+
     *res = *(input + *offset);
     *offset += sizeof(uint8_t);
-    SCReturn;
+    return 1;
 }
 
 /**
@@ -58,13 +64,19 @@ void ENIPExtractUint8(uint8_t *res, uint8_t *input, uint16_t *offset)
  * @param input
  * @param offset
  */
-void ENIPExtractUint16(uint16_t *res, uint8_t *input, uint16_t *offset)
+int ENIPExtractUint16(uint16_t *res, uint8_t *input, uint16_t *offset, uint32_t input_len)
 {
-    SCEnter();
+
+    if (*offset > (input_len - sizeof(uint16_t)))
+    {        
+        SCLogDebug("ENIPExtractUint16: Parsing beyond payload length\n");
+        return 0;
+    }
+
     ByteExtractUint16(res, BYTE_LITTLE_ENDIAN, sizeof(uint16_t),
             (const uint8_t *) (input + *offset));
     *offset += sizeof(uint16_t);
-    SCReturn;
+    return 1;
 }
 
 /**
@@ -73,13 +85,19 @@ void ENIPExtractUint16(uint16_t *res, uint8_t *input, uint16_t *offset)
  * @param input
  * @param offset
  */
-void ENIPExtractUint32(uint32_t *res, uint8_t *input, uint16_t *offset)
+int ENIPExtractUint32(uint32_t *res, uint8_t *input, uint16_t *offset, uint32_t input_len)
 {
-    SCEnter();
+
+    if (*offset > (input_len - sizeof(uint32_t)))
+    {        
+        SCLogDebug("ENIPExtractUint32: Parsing beyond payload length\n");
+        return 0;
+    }
+
     ByteExtractUint32(res, BYTE_LITTLE_ENDIAN, sizeof(uint32_t),
             (const uint8_t *) (input + *offset));
     *offset += sizeof(uint32_t);
-    SCReturn;
+    return 1;
 }
 
 /**
@@ -88,13 +106,19 @@ void ENIPExtractUint32(uint32_t *res, uint8_t *input, uint16_t *offset)
  * @param input
  * @param offset
  */
-void ENIPExtractUint64(uint64_t *res, uint8_t *input, uint16_t *offset)
+int ENIPExtractUint64(uint64_t *res, uint8_t *input, uint16_t *offset, uint32_t input_len)
 {
-    SCEnter();
+
+    if (*offset > (input_len - sizeof(uint64_t)))
+    {        
+        SCLogDebug("ENIPExtractUint64: Parsing beyond payload length\n");
+        return 0;
+    }
+
     ByteExtractUint64(res, BYTE_LITTLE_ENDIAN, sizeof(uint64_t),
             (const uint8_t *) (input + *offset));
     *offset += sizeof(uint64_t);
-    SCReturn;
+    return 1;
 }
 
 
@@ -177,12 +201,30 @@ int DecodeENIPPDU(uint8_t *input, uint32_t input_len,
     uint32_t status;
     uint64_t context;
     uint32_t option;
-    ENIPExtractUint16(&cmd, input, &offset);
-    ENIPExtractUint16(&len, input, &offset);
-    ENIPExtractUint32(&session, input, &offset);
-    ENIPExtractUint32(&status, input, &offset);
-    ENIPExtractUint64(&context, input, &offset);
-    ENIPExtractUint32(&option, input, &offset);
+    if (ENIPExtractUint16(&cmd, input, &offset, input_len) != 1)
+    {
+        return 0;
+    }
+    if (ENIPExtractUint16(&len, input, &offset, input_len) != 1)
+    {
+        return 0;
+    }
+    if (ENIPExtractUint32(&session, input, &offset, input_len) != 1)
+    {
+        return 0;
+    }
+    if (ENIPExtractUint32(&status, input, &offset, input_len) != 1)
+    {
+        return 0;
+    }
+    if (ENIPExtractUint64(&context, input, &offset, input_len) != 1)
+    {
+        return 0;
+    }
+    if (ENIPExtractUint32(&option, input, &offset, input_len) != 1)
+    {
+        return 0;
+    }
 
     enip_data->header.command = cmd;
     enip_data->header.length = len;
@@ -256,19 +298,21 @@ int DecodeCommonPacketFormatPDU(uint8_t *input, uint32_t input_len,
         return 0;
     }
 
-    if (offset >= (input_len - (sizeof(uint32_t) + sizeof(uint16_t)*4)))
-    {
-            SCLogDebug("DecodeCommonPacketFormat: Parsing beyond payload length\n");
-            return 0;
-    }
-
     uint32_t handle;
     uint16_t timeout;
     uint16_t count;
-    ENIPExtractUint32(&handle, input, &offset);
-    ENIPExtractUint16(&timeout, input, &offset);
-    ENIPExtractUint16(&count, input, &offset);
-
+    if (ENIPExtractUint32(&handle, input, &offset, input_len) != 1)
+    {
+        return 0;
+    }
+    if (ENIPExtractUint16(&timeout, input, &offset, input_len) != 1)
+    {
+        return 0;
+    }
+    if (ENIPExtractUint16(&count, input, &offset, input_len) != 1)
+    {
+        return 0;
+    }
     enip_data->encap_data_header.interface_handle = handle;
     enip_data->encap_data_header.timeout = timeout;
     enip_data->encap_data_header.item_count = count;
@@ -278,27 +322,32 @@ int DecodeCommonPacketFormatPDU(uint8_t *input, uint32_t input_len,
     uint32_t address_connectionid = 0;
     uint32_t address_sequence = 0;
 
-    ENIPExtractUint16(&address_type, input, &offset);
-    ENIPExtractUint16(&address_length, input, &offset);
+    if (ENIPExtractUint16(&address_type, input, &offset, input_len) != 1)
+    {
+        return 0;
+    }
+    if (ENIPExtractUint16(&address_length, input, &offset, input_len) != 1)
+    {
+        return 0;
+    }
 
     //depending on addr type, get connection id, sequence if needed.  Can also use addr length too?
     if (address_type == CONNECTION_BASED)
     { //get 4 byte connection id
-	if (offset >= (input_len - sizeof(uint32_t)))
-    	{
-            SCLogDebug("DecodeCommonPacketFormat: Parsing beyond payload length\n");
+        if (ENIPExtractUint32(&address_connectionid, input, &offset, input_len) != 1)
+        {
             return 0;
-	}
-        ENIPExtractUint32(&address_connectionid, input, &offset);
+        }
     } else if (address_type == SEQUENCE_ADDR_ITEM)
-    { // get 4 byte connection id and 4 byte sequence
-	if (offset >= (input_len - sizeof(uint32_t)*2))
-    	{
-            SCLogDebug("DecodeCommonPacketFormat: Parsing beyond payload length\n");
+    { // get 4 byte connection id and 4 byte sequence	
+        if (ENIPExtractUint32(&address_connectionid, input, &offset, input_len) != 1)
+        {
             return 0;
-	}
-        ENIPExtractUint32(&address_connectionid, input, &offset);
-        ENIPExtractUint32(&address_sequence, input, &offset);
+        }
+        if (ENIPExtractUint32(&address_sequence, input, &offset, input_len) != 1)
+        {
+            return 0;
+        }
     }
 
     enip_data->encap_addr_item.type = address_type;
@@ -310,25 +359,24 @@ int DecodeCommonPacketFormatPDU(uint8_t *input, uint32_t input_len,
     uint16_t data_length; //length of data in bytes
     uint16_t data_sequence_count;
 
-    if (offset >= (input_len - sizeof(uint16_t)*2))
-    {
-        SCLogDebug("DecodeCommonPacketFormat: Parsing beyond payload length\n");
+    if (ENIPExtractUint16(&data_type, input, &offset, input_len) != 1)
+    {     
         return 0;
     }
-    ENIPExtractUint16(&data_type, input, &offset);
-    ENIPExtractUint16(&data_length, input, &offset);
+    if (ENIPExtractUint16(&data_length, input, &offset, input_len) != 1)
+    {     
+        return 0;
+    }
 
     enip_data->encap_data_item.type = data_type;
     enip_data->encap_data_item.length = data_length;
 
     if (enip_data->encap_data_item.type == CONNECTED_DATA_ITEM)
-    { //connected data items have seq number
-        if (offset >= (input_len - sizeof(uint16_t)))
-        {
-            SCLogDebug("DecodeCommonPacketFormat: Parsing beyond payload length\n");
+    { //connected data items have seq number        
+        if (ENIPExtractUint16(&data_sequence_count, input, &offset, input_len) != 1)
+        {     
             return 0;
         }
-        ENIPExtractUint16(&data_sequence_count, input, &offset);
         enip_data->encap_data_item.sequence_count = data_sequence_count;
     }
 
@@ -421,13 +469,15 @@ int DecodeCIPRequestPDU(uint8_t *input, uint32_t input_len,
 
     uint8_t service; //<-----CIP SERVICE
     uint8_t path_size;
-    if (offset >= (input_len - sizeof(uint8_t)*2))
-    {
-        SCLogDebug("DecodeCIPRequest: Parsing beyond payload length\n");
+
+    if (ENIPExtractUint8(&service, input, &offset, input_len) != 1)
+    {     
         return 0;
     }
-    ENIPExtractUint8(&service, input, &offset);
-    ENIPExtractUint8(&path_size, input, &offset);
+    if (ENIPExtractUint8(&path_size, input, &offset, input_len) != 1)
+    {     
+        return 0;
+    }
 
     if (service > MAX_CIP_SERVICE)
     { // service codes of value 0x80 or greater are not permitted because in the CIP protocol the highest order bit is used to flag request(0)/response(1)
@@ -444,6 +494,11 @@ int DecodeCIPRequestPDU(uint8_t *input, uint32_t input_len,
 
     //save CIP data
     CIPServiceEntry *node = CIPServiceAlloc(enip_data);
+    if (node == NULL)
+    {
+        SCLogDebug("DecodeCIPRequest: Unable to create CIP service\n");
+	return 0;
+    }
     node->direction = 0;
     node->service = service;
     node->request.path_size = path_size;
@@ -554,21 +609,18 @@ int DecodeCIPRequestPathPDU(uint8_t *input, uint32_t input_len,
 
     while (bytes_remain > 0)
     {
-        if (offset >= (input_len - sizeof(uint8_t)))
-        {
-            SCLogDebug("DecodeCIPRequestPathPDU: Parsing beyond payload length\n");
+        
+        if (ENIPExtractUint8(&segment, input, &offset, input_len) != 1)
+        {     
             return 0;
         }
-        ENIPExtractUint8(&segment, input, &offset);
         switch (segment)
         { //assume order is class then instance.  Can have multiple
-            case PATH_CLASS_8BIT:
-                if (offset >= (input_len - sizeof(uint8_t)))
-                {
-                    SCLogDebug("DecodeCIPRequestPathPDU: Parsing beyond payload length\n");
+            case PATH_CLASS_8BIT:                
+                if (ENIPExtractUint8(&req_path_class8, input, &offset, input_len) != 1)
+                {     
                     return 0;
                 }
-                ENIPExtractUint8(&req_path_class8, input, &offset);
                 class = (uint16_t) req_path_class8;
                 SCLogDebug("DecodeCIPRequestPathPDU: 8bit class 0x%x\n", class);
 
@@ -581,23 +633,19 @@ int DecodeCIPRequestPathPDU(uint8_t *input, uint32_t input_len,
 
                 bytes_remain--;
                 break;
-            case PATH_INSTANCE_8BIT:
-                if (offset >= (input_len - sizeof(uint8_t)))
-                {
-                    SCLogDebug("DecodeCIPRequestPathPDU: Parsing beyond payload length\n");
+            case PATH_INSTANCE_8BIT:                
+                if (ENIPExtractUint8(&req_path_instance8, input, &offset, input_len) != 1)
+                {     
                     return 0;
                 }
-                ENIPExtractUint8(&req_path_instance8, input, &offset);
                 //skip instance, don't need to store
                 bytes_remain--;
                 break;
-            case PATH_ATTR_8BIT: //single attribute
-                if (offset >= (input_len - sizeof(uint8_t)))
-                {
-                    SCLogDebug("DecodeCIPRequestPathPDU: Parsing beyond payload length\n");
+            case PATH_ATTR_8BIT: //single attribute                
+                if (ENIPExtractUint8(&req_path_attr8, input, &offset, input_len) != 1)
+                {     
                     return 0;
                 }
-                ENIPExtractUint8(&req_path_attr8, input, &offset);
                 //uint16_t attrib = (uint16_t) req_path_attr8;
                 //SCLogDebug("DecodeCIPRequestPath: 8bit attr 0x%x\n", attrib);
 
@@ -610,19 +658,15 @@ int DecodeCIPRequestPathPDU(uint8_t *input, uint32_t input_len,
 
                 bytes_remain--;
                 break;
-            case PATH_CLASS_16BIT:
-                if (offset >= (input_len - sizeof(uint8_t)))
-                {
-                    SCLogDebug("DecodeCIPRequestPath: Parsing beyond payload length\n");
+            case PATH_CLASS_16BIT:               
+                if (ENIPExtractUint8(&reserved, input, &offset, input_len) != 1) //skip reserved
+                {     
+                    return 0;
+                }                 
+                if (ENIPExtractUint16(&req_path_class16, input, &offset, input_len) != 1)
+                {     
                     return 0;
                 }
-                ENIPExtractUint8(&reserved, input, &offset); //skip reserved
-                if (offset >= (input_len - sizeof(uint16_t)))
-                {
-                    SCLogDebug("DecodeCIPRequestPath: Parsing beyond payload length\n");
-                    return 0;
-                }
-                ENIPExtractUint16(&req_path_class16, input, &offset);
                 class = req_path_class16;
                 SCLogDebug("DecodeCIPRequestPath: 16bit class 0x%x\n", class);
 
@@ -632,24 +676,32 @@ int DecodeCIPRequestPathPDU(uint8_t *input, uint32_t input_len,
                 seg->segment = segment;
                 seg->value = class;
                 TAILQ_INSERT_TAIL(&node->segment_list, seg, next);
-
-                bytes_remain = bytes_remain - 2;
+                if (bytes_remain >= 2)
+                {
+                    bytes_remain = bytes_remain - 2;
+                } else
+                {
+                    bytes_remain = 0;
+                }
                 break;
             case PATH_INSTANCE_16BIT:
-                if (offset >= (input_len - sizeof(uint8_t)))
-                {
-                    SCLogDebug("DecodeCIPRequestPathPDU: Parsing beyond payload length\n");
+                
+                if (ENIPExtractUint8(&reserved, input, &offset, input_len) != 1) // skip reserved
+                {     
+                    return 0;
+                }                 
+                if (ENIPExtractUint16(&req_path_instance16, input, &offset, input_len) != 1)
+                {     
                     return 0;
                 }
-                ENIPExtractUint8(&reserved, input, &offset); // skip reserved
-                if (offset >= (input_len - sizeof(uint16_t)))
-                {
-                    SCLogDebug("DecodeCIPRequestPathPDU: Parsing beyond payload length\n");
-                    return 0;
-                }
-                ENIPExtractUint16(&req_path_instance16, input, &offset);
                 //skip instance, don't need to store
-                bytes_remain = bytes_remain - 2;
+                if (bytes_remain >= 2)
+                {
+                    bytes_remain = bytes_remain - 2;
+                } else
+                {
+                    bytes_remain = 0;
+                }
                 break;
             default:
                 SCLogDebug(
@@ -665,22 +717,19 @@ int DecodeCIPRequestPathPDU(uint8_t *input, uint32_t input_len,
         uint16_t attr_list_count;
         uint16_t attribute;
         //parse get/set attribute list
-        if (offset >= (input_len - sizeof(uint16_t)))
-        {
-            SCLogDebug("DecodeCIPRequestPathPDU: Parsing beyond payload length\n");
+
+        if (ENIPExtractUint16(&attr_list_count, input, &offset, input_len) != 1)
+        {     
             return 0;
         }
-        ENIPExtractUint16(&attr_list_count, input, &offset);
         SCLogDebug("DecodeCIPRequestPathPDU: attribute list count %d\n",
                 attr_list_count);
         for (int i = 0; i < attr_list_count; i++)
         {
-            if (offset >= (input_len - sizeof(uint16_t)))
-            {
-                SCLogDebug("DecodeCIPRequestPath: Parsing beyond payload length\n");
+            if (ENIPExtractUint16(&attribute, input, &offset, input_len) != 1)
+            {     
                 return 0;
             }
-            ENIPExtractUint16(&attribute, input, &offset);
             SCLogDebug("DecodeCIPRequestPathPDU: attribute %d\n", attribute);
             //save attrs
             AttributeEntry *attr = SCMalloc(sizeof(AttributeEntry));
@@ -716,18 +765,23 @@ int DecodeCIPResponsePDU(uint8_t *input, uint32_t input_len,
         return 0;
     }
 
-    if (offset >= (input_len - (sizeof(uint8_t)*2 + sizeof(uint16_t))))
-    {
-        SCLogDebug("DecodeCIPResponsePDU: Parsing beyond payload length\n");
-        return 0;
-    }
+    
     uint8_t service; //<----CIP SERVICE
     uint8_t reserved; //unused byte reserved by ODVA
     uint16_t status;
 
-    ENIPExtractUint8(&service, input, &offset);
-    ENIPExtractUint8(&reserved, input, &offset);
-    ENIPExtractUint16(&status, input, &offset);
+    if (ENIPExtractUint8(&service, input, &offset, input_len) != 1)
+    {     
+        return 0;
+    }
+    if (ENIPExtractUint8(&reserved, input, &offset, input_len) != 1)
+    {     
+        return 0;
+    }
+    if (ENIPExtractUint16(&status, input, &offset, input_len) != 1)
+    {     
+        return 0;
+    }
 
     //SCLogDebug("DecodeCIPResponse: service 0x%x\n",service);
     service &= 0x7f; //strip off top bit to get service code.  Responses have first bit as 1
@@ -743,6 +797,11 @@ int DecodeCIPResponsePDU(uint8_t *input, uint32_t input_len,
 
     //save CIP data
     CIPServiceEntry *node = CIPServiceAlloc(enip_data);
+    if (node == NULL)
+    {
+        SCLogDebug("DecodeCIPRequest: Unable to create CIP service\n");
+	return 0;
+    }
     node->direction = 1;
     node->service = service;
     node->response.status = status;
